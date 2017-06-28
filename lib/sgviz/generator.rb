@@ -29,8 +29,9 @@ class Sgviz::Generator < Gviz
       fontsize: options.fontsize,
       fontname: options.fontname,
     )
-
+    print "Working on VPC\n"
     vpc_security_groups.each do |vpc_id, security_groups|
+      print "Working on Security Groups\n"
       security_groups.each do |security_group|
         subgraph :clusterAWS do
           global(
@@ -53,7 +54,7 @@ class Sgviz::Generator < Gviz
             shape:       "circle",
             width:       1.5
 
-          subgraph :"cluster#{vpc_id ? vpc_id[4..-1] : 'ec2_classic'}" do
+          subgraph :"clusterSG" do
             global(
               label:     vpc_id ? vpc_id : 'EC2-Classic',
               labelloc:  "b",
@@ -75,19 +76,69 @@ class Sgviz::Generator < Gviz
               width:       1.5
 
             name_tag = security_group.tags.find {|tag| tag.key == "Name"}
+            
 
-            node security_group.id.to_id,
-              shape:     "note",
-              style:     "filled",
-              color:     "#EDEAD2",
-              fillcolor: "#EDEAD2",
-              label:     "#{name_tag ? name_tag.value : security_group.group_name}\n(#{security_group.id})",
-              fontsize:  options.fontsize,
-              fontname:  options.fontname,
-              fontcolor: "#54523F",
-              margin:    0.2
+            # Change here
+            
+
+            node :"#{security_group.id.to_id}",
+             shape:     "note",
+             style:     "filled",
+             color:     "#EDEAD2",
+             fillcolor: "#EDEAD2",
+             label:     "#{name_tag ? name_tag.value : security_group.group_name}\n(#{security_group.id})",
+             fontsize:  options.fontsize,
+             fontname:  options.fontname,
+             fontcolor: "#54523F",
+             margin:    0.2
+
+            #ec2.instances({filters: [{name: 'group-id', values: [security_group.id]}]}).each do |i|
+              subgraph :"#{security_group.id.tr("-", "")}" do
+                global label: "#{name_tag ? name_tag.value : security_group.group_name}"
+               #global(
+                #label:     "#{name_tag ? name_tag.value : security_group.group_name}",
+                #labelloc:  "b",
+                #style:     "rounded",
+                #color:     "#999999",
+                #fontsize:  options.fontsize,
+                #fontname:  options.fontname,
+                #fontcolor: "#54523F",
+                #margin:    20,
+              #)
+               print "Working on EC2 Instances\n"
+
+               ec2.instances.each do |i|
+                name_tag2 = i.tags.find {|tag| tag.key == "Name"}
+                #if (defined? pi) == nil then
+                  #pi = i
+                #end
+                i.security_groups.each do |sg|
+                  if sg.group_id == security_group.id then
+                    print "match\n"
+                    if i.state.name == "running" then
+                      node :"#{i.id.tr("-", "")}",
+                      shape:     "note",
+                      style:     "filled",
+                      color:     "#D3D3D3",
+                      fillcolor: "#D3D3D3",
+                      label:     i.id,
+                      fontsize:  options.fontsize,
+                      fontname:  options.fontname,
+                      fontcolor: "#54523F",
+                      margin:    0.2
+
+                      route :"#{security_group.id.to_id}" => :"#{i.id.tr("-", "")}"
+                      edges color: "#D3D3D3"
+                      #pi = i
+                    end
+                  end
+                end
+              end
+            end
           end
         end
+
+
 
         security_group.ip_permissions.each do |ip_permission|
           to = security_group.id.to_id
